@@ -78,6 +78,44 @@ static __always_inline int parse_ethhdr(struct hdr_cursor *nh, void *data_end,
   return h_proto;
 }
 
+#define IPV6_EXT_MAX_CHAIN 6
+
+static __always_inline int find_correct_ip6nexthdr(struct hdr_cursor *nh,
+                                                   void *data_end,
+                                                   __u8 next_hdr_type) {
+  for (int i = 0; i < IPV6_EXT_MAX_CHAIN; ++i) {
+    struct ipv6_opt_hdr *hdr = nh->pos;
+
+    if (hdr + 1 > data_end)
+      return -1;
+
+    switch (next_hdr_type) {
+    case IPPROTO_HOPOPTS:
+    case IPPROTO_DSTOPTS:
+    case IPPROTO_ROUTING:
+    case IPPROTO_MH:
+      /* https://en.wikipedia.org/wiki/IPv6_packet */
+      nh->pos = (char *)hdr + (hdr->hdrlen + 1) * 8;
+      next_hdr_type = hdr->nexthdr;
+      break;
+    case IPPROTO_AH:
+      /* https://en.wikipedia.org/wiki/IPsec#Authentication_Header */
+      nh->pos = (char *)hdr + (hdr->hdrlen + 2) * 4;
+      next_hdr_type = hdr->nexthdr;
+      break;
+    case IPPROTO_FRAGMENT:
+      nh->pos = (char *)hdr + 16;
+      next_hdr_type = hdr->nexthdr;
+      break;
+    default:
+      /* IPPROTO_ICMPV6 or IPPROTO_NONE */
+      return next_hdr_type;
+    }
+  }
+
+  return -1;
+}
+
 /* Assignment 2: Implement and use this */
 static __always_inline int parse_ip6hdr(struct hdr_cursor *nh, void *data_end,
                                         struct ipv6hdr **ip6hdr) {
@@ -90,25 +128,29 @@ static __always_inline int parse_ip6hdr(struct hdr_cursor *nh, void *data_end,
   if (ip6h + 1 > data_end)
     return -1;
 
-  nh->pos += 1;
+  if (ip6h->version != 6)
+    return -1;
+
+  nh->pos = ip6h + 1;
   *ip6hdr = ip6h;
 
-  return ip6h->nexthdr;
+  /* IPV6 header can contain extension before the TCP/UDP/ICMP header */
+  return find_correct_ip6nexthdr(nh, data_end, ip6h->nexthdr);
 }
 
 /* Assignment 3: Implement and use this */
 static __always_inline int parse_icmp6hdr(struct hdr_cursor *nh, void *data_end,
                                           struct icmp6hdr **icmp6hdr) {
-  struct icmp6hdr *icmp6h = nh->pos;
-
   /* Pointer-arithmetic bounds check; pointer +1 points to after end of
    * thing being pointed to. We will be using this style in the remainder
    * of the tutorial.
    */
+  struct icmp6hdr *icmp6h = nh->pos;
+
   if (icmp6h + 1 > data_end)
     return -1;
 
-  nh->pos += 1;
+  nh->pos = icmp6h + 1;
   *icmp6hdr = icmp6h;
 
   return icmp6h->icmp6_type;

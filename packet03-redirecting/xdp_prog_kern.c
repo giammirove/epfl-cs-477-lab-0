@@ -124,11 +124,11 @@ int xdp_icmp_echo_func(struct xdp_md *ctx) {
   icmphdr->type = echo_reply;
 
   __u32 csum, size = sizeof(struct icmphdr_common);
-  csum = bpf_csum_diff((__be32 *)&icmphdr_old, size, (__be32 *)&icmphdr, size,
+  csum = bpf_csum_diff((__be32 *)&icmphdr_old, size, (__be32 *)icmphdr, size,
                        ~cksum);
   csum = (csum >> 16) + (csum & 0xffff);
   csum += (csum >> 16);
-  icmphdr->cksum = ~csum;
+  icmphdr->cksum = (__u16)~csum;
 
   bpf_printk("echo_reply: %d", echo_reply);
 
@@ -147,12 +147,10 @@ int xdp_redirect_func(struct xdp_md *ctx) {
   struct ethhdr *eth;
   int eth_type;
   int action = XDP_PASS;
-  unsigned char dst[ETH_ALEN] = {0x5e, 0x99, 0x1e, 0x6b,
-                                 0x14, 0x07}; /* Assignment 2: fill in with the
-                               MAC address of the left inner interface
-                               */
-  unsigned ifindex = 9; /* Assignment 2: fill in with the ifindex of the
-                                 left interface */
+  /* Assignment 2: fill in with the MAC address of the left inner interface */
+  unsigned char dst[ETH_ALEN] = {0x7e, 0x29, 0xfb, 0x29, 0x1c, 0xcf};
+  /* Assignment 2: fill in with the ifindex of the left interface */
+  unsigned ifindex = 125;
 
   /* These keep track of the next header type and iterator pointer */
   nh.pos = data;

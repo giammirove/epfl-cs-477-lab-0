@@ -165,7 +165,7 @@ int xdp_vlan_swap_func(struct xdp_md *ctx) {
   if (proto_is_vlan(eth->h_proto))
     vlan_tag_pop(ctx, eth);
   else
-    vlan_tag_push(ctx, eth, 1);
+    vlan_tag_push(ctx, eth, 23);
 
   return XDP_PASS;
 }
